@@ -23,6 +23,11 @@ available installer.
   hidden and minimized windows. Hold Cmd while pressing Tab to select, release
   Cmd to open the selection, use Shift+Tab to move backward, or Escape to cancel.
   Disable this feature to restore macOS’s standard Cmd+Tab behavior.
+- **CPU and RAM in the switcher:** each app shows its CPU and memory use,
+  including its helper processes (browser tabs, Electron helpers), measured the
+  same way as Activity Monitor. CPU turns orange at 40% and red at 90%. RAM is
+  only highlighted for apps over 1 GB when macOS reports memory pressure, since
+  a full-looking RAM number alone is normal on a Mac.
 
 Click the PC Mode menu-bar icon to open Settings and About. Changes to the
 available feature settings save immediately.
@@ -55,4 +60,4 @@ Quit other keyboard remappers before use to avoid conflicting shortcuts.
 
 The installer build creates `PCMode.app` and `PCMode-Installer.dmg` in the project
 folder. The included tests cover the shortcut press gate, Finder move state, key
-mappings, and switcher navigation logic.
+mappings, switcher navigation logic, and CPU/RAM formatting and thresholds.

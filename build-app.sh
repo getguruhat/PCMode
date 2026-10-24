@@ -13,5 +13,5 @@ cp AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp HatMenu.png "$APP/Contents/Resources/HatMenu.png"
 cp SettingsIcons/*.png "$APP/Contents/Resources/"
 codesign --force --deep --sign - "$APP" >/dev/null
-"$ROOT/../create-dmg-installer.sh" "$APP" "PC Mode" "$ROOT/PCMode-Installer.dmg"
+"$ROOT/../../../tools/create-dmg-installer.sh" "$APP" "PC Mode" "$ROOT/PCMode-Installer.dmg"
 echo "$APP"

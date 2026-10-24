@@ -19,6 +19,8 @@ private struct SwitchTarget: Identifiable {
 private final class SwitcherModel: ObservableObject {
     @Published var targets: [SwitchTarget] = []
     @Published var selected = 0
+    @Published var usage: [pid_t: AppUsage] = [:]
+    @Published var pressure: MemoryPressure = .normal
 }
 
 /// AX enumeration happens off the event-tap thread. Queued key presses and
@@ -33,6 +35,20 @@ final class WindowSwitcher {
     private var generation = 0
     private var recency: [pid_t] = []
     private var consumedKeys = Set<Int64>()
+    private let stats = ProcessStats()
+
+    init() {
+        stats.onUpdate = { [weak self] in
+            guard let self, self.active else { return }
+            self.refreshUsage()
+        }
+        stats.start()
+    }
+
+    private func refreshUsage() {
+        model.usage = stats.usage
+        model.pressure = stats.pressure
+    }
 
     func recordActivation() {
         guard let app = NSWorkspace.shared.frontmostApplication,
@@ -73,6 +89,7 @@ final class WindowSwitcher {
         generation += 1
         let request = generation
         recordActivation()
+        refreshUsage()
         let order = recency
         let apps = NSWorkspace.shared.runningApplications.filter {
             $0.activationPolicy == .regular && $0.processIdentifier != getpid() && !$0.isTerminated
@@ -128,7 +145,7 @@ final class WindowSwitcher {
 
     private func showPanel() {
         if panel == nil {
-            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
+            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 600, height: 420),
                                 styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
                                 backing: .buffered, defer: false)
             panel.titleVisibility = .hidden
@@ -184,7 +201,14 @@ private struct SwitcherView: View {
     @ObservedObject var model: SwitcherModel
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Windows & Apps").font(.headline)
+            HStack(spacing: 12) {
+                Text("Windows & Apps").font(.headline)
+                Spacer()
+                Text("CPU").frame(width: UsageColumns.cpu, alignment: .trailing)
+                Text("RAM").frame(width: UsageColumns.ram, alignment: .trailing)
+            }
+            .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(spacing: 4) {
@@ -197,6 +221,11 @@ private struct SwitcherView: View {
                                     Text(target.detail).font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
+                                // Usage is per app, so only the app's first row carries it.
+                                let pid = target.app.processIdentifier
+                                let firstRow = index == 0 || model.targets[index - 1].app.processIdentifier != pid
+                                UsageColumns(usage: firstRow ? model.usage[pid] : nil, pressure: model.pressure,
+                                             placeholder: firstRow ? "–" : "")
                             }
                             .padding(10)
                             .background(index == model.selected ? Color.accentColor.opacity(0.22) : Color.clear)
@@ -212,6 +241,37 @@ private struct SwitcherView: View {
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(20)
-        .frame(width: 520, height: 420)
+        .frame(width: 600, height: 420)
+    }
+}
+
+private struct UsageColumns: View {
+    static let cpu: CGFloat = 48
+    static let ram: CGFloat = 64
+    let usage: AppUsage?
+    let pressure: MemoryPressure
+    let placeholder: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            cell(usage.map { UsageFormat.cpu($0.cpu) }, level: usage.map { UsageFormat.cpuLevel($0.cpu) })
+                .frame(width: Self.cpu, alignment: .trailing)
+            cell(usage.map { UsageFormat.memory($0.memory) },
+                 level: usage.map { UsageFormat.memoryLevel($0.memory, pressure: pressure) })
+                .frame(width: Self.ram, alignment: .trailing)
+        }
+        .font(.callout.monospacedDigit())
+    }
+
+    private func cell(_ text: String?, level: UsageLevel?) -> some View {
+        let color: Color = switch level ?? .normal {
+        case .normal: .secondary
+        case .high: .orange
+        case .critical: .red
+        }
+        return Text(text ?? placeholder)
+            .fontWeight(level == nil || level == .normal ? .regular : .semibold)
+            .foregroundStyle(color)
+            .lineLimit(1)
     }
 }
