@@ -33,10 +33,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }) { NSApp.terminate(nil); return }
         NSApp.setActivationPolicy(.accessory)
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let iconURL = Bundle.main.url(forResource: "HatMenu", withExtension: "png"),
-           let icon = NSImage(contentsOf: iconURL) {
+        // MenuIcon.png + MenuIcon@2x.png; template so it follows light/dark menu bars.
+        if let icon = Bundle.main.image(forResource: "MenuIcon") {
             icon.size = NSSize(width: 20, height: 20)
-            icon.isTemplate = false
+            icon.isTemplate = true
             item.button?.image = icon
             item.button?.imagePosition = .imageOnly
             item.button?.toolTip = "PC Mode"

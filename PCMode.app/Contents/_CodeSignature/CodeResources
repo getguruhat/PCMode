@@ -16,9 +16,13 @@
 		<data>
 		hHQL0jMfb7JRwvMHyroyxyNQxRQ=
 		</data>
-		<key>Resources/HatMenu.png</key>
+		<key>Resources/MenuIcon.png</key>
 		<data>
-		jCslJZI1IvWK3kJ0vfgDncZ1I+A=
+		gxvW+wxntfMdnJ2npWl4swQFTtM=
+		</data>
+		<key>Resources/MenuIcon@2x.png</key>
+		<data>
+		rSS+hIpnebNtjLljqDaxTrpFbX4=
 		</data>
 		<key>Resources/PermissionSettingIcon.png</key>
 		<data>
@@ -52,11 +56,18 @@
 			y5osreKXkLJZ/7+w2bGFc+C6fc/61wjmd2jBq0y3nXw=
 			</data>
 		</dict>
-		<key>Resources/HatMenu.png</key>
+		<key>Resources/MenuIcon.png</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			BvL0mQyXkIiMA2GsKBLJ5sDiDgOkwzYH39qLyDvBuNA=
+			w4sMnl0V7oGORAjhkba9G+W9Opk1ro91u+gr65L7DvM=
+			</data>
+		</dict>
+		<key>Resources/MenuIcon@2x.png</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			SHQzw1HEnodBTryKDv57qaOiTQm/j7Xe7Vz3/Lf7NJA=
 			</data>
 		</dict>
 		<key>Resources/PermissionSettingIcon.png</key>
