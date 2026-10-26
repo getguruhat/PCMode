@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var item: NSStatusItem!
     private let settings = WinSettings()
     private let settingsWindow = SettingsWindowController()
+    private let updates = UpdateChecker(appName: "PC Mode", repo: "getguruhat/PCMode")
     private var settingsRevision = 0
     private let switcher = WindowSwitcher()
     private var isBackgroundLaunch: Bool { CommandLine.arguments.contains("--background") }
@@ -64,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.refresh() }
         if CommandLine.arguments.contains("--settings") { showSettings() }
+        updates.start()
     }
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
@@ -78,7 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showSettings() {
-        settingsWindow.show(settings: settings) { [weak self] in self?.requestPermissions() }
+        settingsWindow.show(settings: settings, updates: updates) { [weak self] in self?.requestPermissions() }
     }
     @objc private func quit() { NSApp.terminate(nil) }
     @objc private func requestPermissions() {

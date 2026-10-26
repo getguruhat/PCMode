@@ -131,13 +131,13 @@ private struct SettingsSystemIcon: View {
 
 final class SettingsWindowController {
     private var window: NSWindow?
-    func show(settings: WinSettings, requestPermissions: @escaping () -> Void) {
+    func show(settings: WinSettings, updates: UpdateChecker, requestPermissions: @escaping () -> Void) {
         if window == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 466, height: 570),
                                   styleMask: [.titled, .closable], backing: .buffered, defer: false)
             window.title = "PC Mode"
             window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: SettingsWindowView(settings: settings, requestPermissions: requestPermissions))
+            window.contentView = NSHostingView(rootView: SettingsWindowView(settings: settings, updates: updates, requestPermissions: requestPermissions))
             window.center()
             self.window = window
         }
@@ -148,6 +148,7 @@ final class SettingsWindowController {
 
 struct SettingsWindowView: View {
     @ObservedObject var settings: WinSettings
+    @ObservedObject var updates: UpdateChecker
     let requestPermissions: () -> Void
 
     var body: some View {
@@ -247,7 +248,10 @@ struct SettingsWindowView: View {
                 Image(nsImage: NSImage(named: NSImage.applicationIconName) ?? NSImage())
                     .resizable().scaledToFit().frame(width: 140, height: 140)
                 Text("PC Mode").font(.title).bold()
-                Text("Version 1.3.0").foregroundStyle(.secondary)
+                Text("Version \(updates.currentVersion)").foregroundStyle(.secondary)
+                if let update = updates.available {
+                    Link("Download PC Mode \(update.version) ›", destination: update.page)
+                }
                 Text("A GuruHat open-source tool").font(.headline)
                 Text("Put on your PC hat.").foregroundStyle(.secondary)
                 Divider().padding(.vertical, 4)
