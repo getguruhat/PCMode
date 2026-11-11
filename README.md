@@ -41,6 +41,10 @@ app exposes no windows. It unhides the selected app, restores the selected
 minimized window and raises it. Apps may restrict which windows they expose.
 Window enumeration runs in the background with bounded Accessibility calls.
 
+## Questions and ideas
+
+⭐ Star this repo if PC Mode is useful to you. Questions and ideas are welcome in [Discussions](https://github.com/getguruhat/PCMode/discussions), and bugs go in [Issues](https://github.com/getguruhat/PCMode/issues).
+
 ## Build and run
 
 Requires macOS 13+ and Swift Command Line Tools.
@@ -51,8 +55,8 @@ Requires macOS 13+ and Swift Command Line Tools.
 open ./PCMode.app --args --settings
 ```
 
-Enable PC Mode in **System Settings → Privacy & Security → Accessibility** and
-**Input Monitoring**. The Settings **Manage** button opens the system permission
+Enable PC Mode in **System Settings → Privacy & Security → Accessibility** (called
+**Device Control and Data Access** on macOS 27) and **Input Monitoring**. The Settings **Manage** button opens the system permission
 requests, and the status indicator reports when all required permissions are ready.
 
 Local builds are ad-hoc signed. Rebuilding can require granting permissions again.
