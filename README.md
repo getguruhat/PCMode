@@ -65,3 +65,5 @@ Quit other keyboard remappers before use to avoid conflicting shortcuts.
 The installer build creates `PCMode.app` and `PCMode-Installer.dmg` in the project
 folder. The included tests cover the shortcut press gate, Finder move state, key
 mappings, switcher navigation logic, and CPU/RAM formatting and thresholds.
+
+Guide: [Windows shortcuts on a Mac](https://guruhat.com/guides/windows-shortcuts-on-mac/). More at [guruhat.com/apps/pcmode](https://guruhat.com/apps/pcmode/).
