@@ -29,6 +29,9 @@ available installer.
   only highlighted for apps over 1 GB when macOS reports memory pressure, since
   a full-looking RAM number alone is normal on a Mac.
 
+PC Mode follows the Mac's language: English, Spanish, German, French, Portuguese, Japanese,
+Simplified Chinese and Korean (set `PCMODE_LANGUAGE=de` to test one).
+
 Click the PC Mode menu-bar icon to open Settings and About. Changes to the
 available feature settings save immediately.
 
@@ -65,5 +68,3 @@ Quit other keyboard remappers before use to avoid conflicting shortcuts.
 The installer build creates `PCMode.app` and `PCMode-Installer.dmg` in the project
 folder. The included tests cover the shortcut press gate, Finder move state, key
 mappings, switcher navigation logic, and CPU/RAM formatting and thresholds.
-
-Guide: [Windows shortcuts on a Mac](https://guruhat.com/guides/windows-shortcuts-on-mac/). More at [guruhat.com/apps/pcmode](https://guruhat.com/apps/pcmode/).

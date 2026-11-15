@@ -12,9 +12,9 @@ final class WinSettings: ObservableObject {
     @Published var launchAtLogin: Bool { didSet { updateLaunchAtLogin() } }
     @Published var menuBarIconEnabled: Bool { didSet { save() } }
     @Published var launchAtLoginMessage = ""
-    @Published var permissionMessage = "Checking permissions…"
+    @Published var permissionMessage = T("Checking permissions…")
     private var updatingLaunchAtLogin = false
-    var permissionsReady: Bool { permissionMessage == "Ready" }
+    var permissionsReady: Bool { permissionMessage == T("Ready") }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -29,7 +29,7 @@ final class WinSettings: ObservableObject {
         menuBarIconEnabled = defaults.bool(forKey: "MenuBarIconEnabled")
         launchAtLogin = defaults.bool(forKey: "LaunchAtLogin")
         defaults.removeObject(forKey: "SystemEventsFallback")
-        if SMAppService.mainApp.status != .enabled {
+        if SMAppService.mainApp.status != .enabled && !agentInstalled {
             launchAtLogin = true
             updateLaunchAtLogin()
         } else {
@@ -51,17 +51,17 @@ final class WinSettings: ObservableObject {
         defaults.set(launchAtLogin, forKey: "LaunchAtLogin")
         do {
             if launchAtLogin {
-                if SMAppService.mainApp.status == .notRegistered { try SMAppService.mainApp.register() }
+                if SMAppService.mainApp.status == .notRegistered { try? SMAppService.mainApp.register() }
                 if SMAppService.mainApp.status != .enabled { try installLaunchAgent() }
-            } else if SMAppService.mainApp.status != .notRegistered {
-                try SMAppService.mainApp.unregister()
+            } else {
+                if SMAppService.mainApp.status != .notRegistered { try? SMAppService.mainApp.unregister() }
                 removeLaunchAgent()
             }
             refreshLaunchAtLoginMessage()
         } catch {
             launchAtLogin = false
             defaults.set(false, forKey: "LaunchAtLogin")
-            launchAtLoginMessage = "Could not update Login Items: \(error.localizedDescription)"
+            launchAtLoginMessage = T("Could not update Login Items: {0}", error.localizedDescription)
         }
     }
 
@@ -80,6 +80,13 @@ final class WinSettings: ObservableObject {
         (plist as NSDictionary).write(to: plistURL, atomically: true)
     }
 
+    /// The launch agent PC Mode installs when macOS won't register it as a Login Item, such as
+    /// for a copy that isn't signed by a developer.
+    private var agentInstalled: Bool {
+        FileManager.default.fileExists(atPath: FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/LaunchAgents/com.andre.pcmode.plist").path)
+    }
+
     private func removeLaunchAgent() {
         let url = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/LaunchAgents/com.andre.pcmode.plist")
@@ -90,54 +97,65 @@ final class WinSettings: ObservableObject {
         case .enabled:
             launchAtLogin = true
             launchAtLoginMessage = ""
-        case .requiresApproval:
+        case .requiresApproval where !agentInstalled:
             launchAtLogin = false
-            launchAtLoginMessage = "Allow PC Mode in System Settings → General → Login Items."
-        case .notFound:
+            launchAtLoginMessage = T("Allow PC Mode in System Settings → General → Login Items.")
+        case .notFound where !agentInstalled:
             launchAtLogin = false
-            launchAtLoginMessage = "Move PC Mode to Applications to enable this."
+            launchAtLoginMessage = T("Move PC Mode to Applications to enable this.")
         default:
-            launchAtLogin = false
+            launchAtLogin = agentInstalled
             launchAtLoginMessage = ""
         }
     }
 }
 
-private struct SettingsIcon: View {
-    let name: String
+/// A glossy, raised tile with a white symbol: a gradient, a bright top edge and a soft shadow
+/// underneath, so it reads as a small 3D object.
+private struct Icon3D: View {
+    let symbol: String
+    let top: Color
+    let bottom: Color
+    private let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+
     var body: some View {
-        let icon = Bundle.main.url(forResource: name, withExtension: "png")
-            .flatMap(NSImage.init(contentsOf:)) ?? NSImage()
-        Image(nsImage: icon)
-            .resizable()
-            .scaledToFill()
-            .frame(width: 48, height: 48)
-            .scaleEffect(1.18)
-            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-            .frame(width: 48, alignment: .center)
+        ZStack {
+            shape.fill(LinearGradient(colors: [top, bottom], startPoint: .top, endPoint: .bottom))
+            // Gloss on the upper half.
+            shape.fill(LinearGradient(colors: [.white.opacity(0.38), .white.opacity(0)], startPoint: .top, endPoint: .center))
+            shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.75), .white.opacity(0.05), .black.opacity(0.18)],
+                                              startPoint: .top, endPoint: .bottom), lineWidth: 1)
+            Image(systemName: symbol)
+                .font(.system(size: 21, weight: .bold))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.3), radius: 1, y: 1.5)
+        }
+        .frame(width: 44, height: 44)
+        .shadow(color: bottom.opacity(0.5), radius: 4, y: 3)
     }
 }
 
-private struct SettingsSystemIcon: View {
-    let name: String
-    var color: Color = .blue
-    var body: some View {
-        Image(systemName: name)
-            .font(.system(size: 25, weight: .semibold))
-            .foregroundStyle(color)
-            .frame(width: 48, height: 48)
-    }
+/// Which tab the Settings window shows. (@State needs a macro plugin the command-line
+/// toolchain lacks.)
+final class SettingsTab: ObservableObject {
+    enum Tab: String, CaseIterable { case features = "Features", general = "General", about = "About" }
+    @Published var current: Tab = .features
 }
 
 final class SettingsWindowController {
     private var window: NSWindow?
+    private let tab = SettingsTab()
     func show(settings: WinSettings, updates: UpdateChecker, requestPermissions: @escaping () -> Void) {
         if window == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 466, height: 570),
-                                  styleMask: [.titled, .closable], backing: .buffered, defer: false)
-            window.title = "PC Mode"
+            // A hosting controller, not a hosting view: the window takes its preferred size, and
+            // follows it when the tab changes the content's height.
+            let hosting = NSHostingController(rootView: SettingsWindowView(settings: settings, updates: updates, tab: tab,
+                                                                          requestPermissions: requestPermissions))
+            hosting.sizingOptions = [.preferredContentSize]
+            let window = NSWindow(contentViewController: hosting)
+            window.styleMask = [.titled, .closable]
+            window.title = T("PC Mode Settings")
             window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: SettingsWindowView(settings: settings, updates: updates, requestPermissions: requestPermissions))
             window.center()
             self.window = window
         }
@@ -149,146 +167,191 @@ final class SettingsWindowController {
 struct SettingsWindowView: View {
     @ObservedObject var settings: WinSettings
     @ObservedObject var updates: UpdateChecker
+    @ObservedObject var tab: SettingsTab
     let requestPermissions: () -> Void
+    private let donationURL = URL(string: "https://www.paypal.com/donate/?hosted_button_id=FHGYWD46722JS")!
+    private let helpURL = URL(string: "https://guruhat.com/apps/pcmode/help/")!
 
     var body: some View {
-        TabView {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Finder").font(.headline)
-                HStack(alignment: .top, spacing: 12) {
-                    SettingsSystemIcon(name: "trash.fill")
-                    VStack(alignment: .leading, spacing: 10) {
-                        Toggle("Delete key moves items to Trash", isOn: $settings.deleteEnabled)
-                        HStack(spacing: 10) {
-                            Text("Shortcut key")
-                            Picker("Shortcut key", selection: $settings.deleteKey) {
-                                ForEach(DeleteKey.menuCases) { key in
-                                    Label(key.menuTitle, systemImage: key.symbolName)
-                                        .tag(key)
-                                }
+        VStack(spacing: 16) {
+            tabSwitch
+            switch tab.current {
+            case .features: featuresTab
+            case .general: generalTab
+            case .about: aboutTab
+            }
+        }
+        .padding(20)
+        .frame(width: 390)
+        .foregroundStyle(Theme.text)
+        .background(Theme.page)
+    }
+
+    /// The same soft track and white pill as ServerHat's and AI Meter's switch.
+    private var tabSwitch: some View {
+        HStack(spacing: 2) {
+            ForEach(SettingsTab.Tab.allCases, id: \.self) { item in
+                let selected = item == tab.current
+                Button { tab.current = item } label: {
+                    Text(T(item.rawValue))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(selected ? Theme.text : Theme.secondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 24)
+                        .background(Capsule().fill(selected ? Theme.card : Color.clear)
+                            .shadow(color: .black.opacity(selected ? 0.12 : 0), radius: 1.5, y: 0.5))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(Capsule().fill(Color.primary.opacity(0.07)))
+        .frame(maxWidth: .infinity)
+    }
+
+    private func title(_ text: String) -> some View {
+        Text(T(text)).font(.system(size: 13, weight: .semibold))
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func hint(_ text: String) -> some View {
+        Text(T(text)).font(.system(size: 11)).foregroundStyle(Theme.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func row(icon: some View, _ text: String, detail: String, isOn: Binding<Bool>) -> some View {
+        HStack(spacing: 12) {
+            icon
+            VStack(alignment: .leading, spacing: 2) {
+                title(text)
+                hint(detail)
+            }
+            Spacer(minLength: 8)
+            Toggle(T(text), isOn: isOn).toggleStyle(.switch).labelsHidden()
+        }
+    }
+
+    private var featuresTab: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                Icon3D(symbol: "trash.fill", top: Color(red: 0.45, green: 0.62, blue: 1.0), bottom: Color(red: 0.16, green: 0.30, blue: 0.86))
+                VStack(alignment: .leading, spacing: 6) {
+                    title("Delete key moves items to Trash")
+                    HStack(spacing: 8) {
+                        Text(T("Shortcut key")).font(.system(size: 11)).foregroundStyle(Theme.secondary)
+                        Picker(T("Shortcut key"), selection: $settings.deleteKey) {
+                            ForEach(DeleteKey.menuCases) { key in
+                                Label(key.menuTitle, systemImage: key.symbolName).tag(key)
                             }
-                            .labelsHidden()
-                            .frame(width: 95)
-                            .disabled(!settings.deleteEnabled)
                         }
-                        Text("Uses this key instead of its normal Finder action.")
-                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        .labelsHidden()
+                        .frame(width: 95)
+                        .disabled(!settings.deleteEnabled)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    hint("Uses this key instead of its normal Finder action.")
                 }
-                HStack(alignment: .top, spacing: 12) {
-                    SettingsIcon(name: "CutSettingIcon")
-                    VStack(alignment: .leading, spacing: 8) {
-                        Toggle("Cut and move with ⌘X / ⌘V", isOn: $settings.cutEnabled)
-                        Text("Select files, press ⌘X, then open a destination folder and press ⌘V.")
-                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: 8)
+                Toggle(T("Delete key moves items to Trash"), isOn: $settings.deleteEnabled)
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            .card(padding: 12)
+
+            row(icon: Icon3D(symbol: "scissors", top: Color(red: 1.0, green: 0.68, blue: 0.30), bottom: Color(red: 0.93, green: 0.40, blue: 0.08)),
+                "Cut and move with ⌘X / ⌘V",
+                detail: "Select files, press ⌘X, then open a destination folder and press ⌘V.", isOn: $settings.cutEnabled)
+                .card(padding: 12)
+
+            row(icon: Icon3D(symbol: "macwindow.on.rectangle", top: Color(red: 0.36, green: 0.82, blue: 0.95), bottom: Color(red: 0.05, green: 0.50, blue: 0.82)),
+                "Switch individual windows with ⌘Tab",
+                detail: "Switch between individual windows, including minimized and hidden windows.", isOn: $settings.switcherEnabled)
+                .card(padding: 12)
+        }
+    }
+
+    private var generalTab: some View {
+        VStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 12) {
+                    Icon3D(symbol: "power", top: Color(red: 0.45, green: 0.88, blue: 0.55), bottom: Color(red: 0.10, green: 0.60, blue: 0.32))
+                    title("Open PC Mode at login")
+                    Spacer()
+                    Toggle(T("Open PC Mode at login"), isOn: $settings.launchAtLogin)
+                        .toggleStyle(.switch).labelsHidden()
                 }
-                Divider()
-                Text("Windows").font(.headline)
-                HStack(alignment: .top, spacing: 12) {
-                    SettingsIcon(name: "WindowSettingIcon")
-                    VStack(alignment: .leading, spacing: 8) {
-                        Toggle("Switch individual windows with ⌘Tab", isOn: $settings.switcherEnabled)
-                        Text("Switch between individual windows, including minimized and hidden windows.")
-                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !settings.launchAtLoginMessage.isEmpty {
+                    Text(settings.launchAtLoginMessage).font(.system(size: 11)).foregroundStyle(Theme.orange)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Divider()
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("PC Mode").font(.headline)
-                    HStack(alignment: .center, spacing: 12) {
-                        SettingsSystemIcon(name: "menubar.rectangle")
-                        Toggle("Show PC Mode in the menu bar", isOn: $settings.menuBarIconEnabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .card(padding: 12)
+
+            HStack(spacing: 12) {
+                Icon3D(symbol: "menubar.rectangle", top: Color(red: 0.72, green: 0.58, blue: 1.0), bottom: Color(red: 0.43, green: 0.27, blue: 0.85))
+                title("Show PC Mode in the menu bar")
+                Spacer()
+                Toggle(T("Show PC Mode in the menu bar"), isOn: $settings.menuBarIconEnabled)
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            .card(padding: 12)
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    Icon3D(symbol: "lock.shield.fill", top: settings.permissionsReady ? Color(red: 0.45, green: 0.88, blue: 0.55) : Color(red: 1.0, green: 0.55, blue: 0.50),
+                           bottom: settings.permissionsReady ? Color(red: 0.10, green: 0.60, blue: 0.32) : Color(red: 0.85, green: 0.20, blue: 0.20))
+                    VStack(alignment: .leading, spacing: 2) {
+                        title("Permissions")
+                        Text(settings.permissionMessage)
+                            .font(.system(size: 11)).foregroundStyle(Theme.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                }
-                Color.clear.frame(height: 4)
-                HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Permissions")
-                            .font(.headline)
-                        HStack(spacing: 12) {
-                            Button("Manage", action: requestPermissions)
-                            ZStack {
-                                Circle()
-                                    .fill(settings.permissionsReady ? Color.green : Color.red)
-                                Image(systemName: settings.permissionsReady ? "checkmark" : "exclamationmark")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(.white)
-                            }
-                            .frame(width: 16, height: 16)
-                            .fixedSize()
-                            Text(settings.permissionMessage)
-                                .font(.caption).foregroundStyle(.secondary)
-                                .lineLimit(2)
-                        }
-                    }
-                    .padding(.trailing, 24)
                     Spacer(minLength: 0)
                 }
-                .padding(.top, -18)
-                Spacer(minLength: 8)
-                HStack {
-                    Spacer()
-                    Button("Quit PC Mode") {
-                        NSApp.terminate(nil)
-                    }
-                    .keyboardShortcut("q", modifiers: [.command])
-                    Spacer()
+                HStack(spacing: 8) {
+                    Button(T("Manage"), action: requestPermissions)
+                        .buttonStyle(TintButtonStyle(color: Theme.accent))
+                    Link(T("Not working? ›"), destination: helpURL)
+                        .font(.system(size: 11)).foregroundStyle(Theme.accent)
                 }
             }
-            .padding(18)
-            .offset(y: -8)
-            .tabItem { Text("Settings") }
+            .card(padding: 12)
 
-            VStack(spacing: 14) {
-                Image(nsImage: NSImage(named: NSImage.applicationIconName) ?? NSImage())
-                    .resizable().scaledToFit().frame(width: 140, height: 140)
-                Text("PC Mode").font(.title).bold()
-                Text("Version \(updates.currentVersion)").foregroundStyle(.secondary)
-                if let update = updates.available {
-                    Link("Download PC Mode \(update.version) ›", destination: update.page)
-                }
-                Text("A GuruHat open-source tool").font(.headline)
-                Text("Put on your PC hat.").foregroundStyle(.secondary)
-                Divider().padding(.vertical, 4)
-                HStack(spacing: 12) {
-                    Button {
-                        NSWorkspace.shared.open(URL(string: "https://github.com/getguruhat")!)
-                    } label: {
-                        Label("View on GitHub ↗", systemImage: "chevron.left.forwardslash.chevron.right")
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 54)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.primary)
-                    .background(Color(nsColor: .windowBackgroundColor))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.28)))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    Button {
-                        NSWorkspace.shared.open(URL(string: "https://www.paypal.com/donate/?hosted_button_id=FHGYWD46722JS")!)
-                    } label: {
-                        Label("Support GuruHat", systemImage: "heart.fill")
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 54)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white)
-                    .background(Color.blue.gradient)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-                Text("Thank you for using PC Mode!").font(.caption).foregroundStyle(.secondary)
-                Text("Windows is a trademark of Microsoft.\nGuruHat is not affiliated with or endorsed by Microsoft.")
-                    .multilineTextAlignment(.center).font(.caption2).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(20)
-            .tabItem { Text("About") }
+            Button(T("Quit PC Mode")) { NSApp.terminate(nil) }
+                .buttonStyle(TintButtonStyle(color: Theme.red))
+                .keyboardShortcut("q", modifiers: [.command])
         }
-        .padding(12)
-        .frame(width: 466, height: 570)
+    }
+
+    private var aboutTab: some View {
+        VStack(spacing: 12) {
+            Image(nsImage: NSImage(named: NSImage.applicationIconName) ?? NSImage())
+                .resizable().scaledToFit().frame(width: 76, height: 76)
+            VStack(spacing: 4) {
+                Text("PC Mode").font(.title2).bold()
+                Text(T("Version {0}", updates.currentVersion)).foregroundStyle(.secondary)
+                if let update = updates.available {
+                    Link(T("Download PC Mode {0} ›", update.version), destination: update.page)
+                        .foregroundStyle(Theme.accent)
+                }
+                Text(T("A GuruHat open-source tool")).font(.headline)
+                Text(T("Put on your PC hat.")).foregroundStyle(.secondary)
+            }
+            Divider().padding(.vertical, 2)
+            Link(destination: donationURL) {
+                Label(T("Support GuruHat"), systemImage: "heart.fill").frame(maxWidth: .infinity)
+            }
+            .foregroundStyle(Theme.accent)
+            Text(T("Donations keep GuruHat apps free. Thank you!"))
+                .font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: 14) {
+                Link("guruhat.com", destination: URL(string: "https://guruhat.com")!)
+                Link(T("Troubleshooting ›"), destination: helpURL)
+            }
+            .font(.caption).foregroundStyle(Theme.accent)
+            Text(T("Windows is a trademark of Microsoft.\nGuruHat is not affiliated with or endorsed by Microsoft."))
+                .multilineTextAlignment(.center).font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }

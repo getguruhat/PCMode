@@ -89,11 +89,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = CGRequestPostEventAccess()
         refresh()
     }
+    // macOS 27 renamed the Accessibility privacy pane.
+    private var accessibilityPaneName: String {
+        ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27 ? "Device Control and Data Access" : "Accessibility"
+    }
     private func refresh() {
         let ax = AXIsProcessTrusted(), listen = CGPreflightListenEventAccess(), post = CGPreflightPostEventAccess()
         settings.permissionMessage = ax && listen && post
-            ? "Ready"
-            : "Enable Device Control and Data Access, then restart."
+            ? T("Ready")
+            : T("Turn on PC Mode in {0} and Input Monitoring, then restart.", T(accessibilityPaneName))
         guard ax && listen && post else { switcher.cancel(); return }
         if tap == nil { installTap() }
         if let tap, !CGEvent.tapIsEnabled(tap: tap) {
@@ -113,7 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let context else { return Unmanaged.passUnretained(event) }
             return Unmanaged<AppDelegate>.fromOpaque(context).takeUnretainedValue().event(type, event)
         }, userInfo: Unmanaged.passUnretained(self).toOpaque())
-        guard let tap else { settings.permissionMessage = "Enable permissions, then restart PC Mode."; return }
+        guard let tap else { settings.permissionMessage = T("Enable permissions, then restart PC Mode."); return }
         source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)

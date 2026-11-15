@@ -113,17 +113,17 @@ final class WindowSwitcher {
                     guard role == kAXWindowRole else { continue }
                     let title = axValue(window, kAXTitleAttribute) as? String ?? ""
                     let minimized = (axValue(window, kAXMinimizedAttribute) as? Bool) == true
-                    let detail = [app.localizedName ?? "App", app.isHidden ? "Hidden" : nil,
-                                  minimized ? "Minimized" : nil].compactMap { $0 }.joined(separator: " · ")
+                    let detail = [app.localizedName ?? T("App"), app.isHidden ? T("Hidden") : nil,
+                                  minimized ? T("Minimized") : nil].compactMap { $0 }.joined(separator: " · ")
                     let target = SwitchTarget(app: app, window: window,
-                                              title: title.isEmpty ? (app.localizedName ?? "Window") : title,
+                                              title: title.isEmpty ? (app.localizedName ?? T("Window")) : title,
                                               detail: detail)
                     if let focused, CFEqual(focused, window) { appTargets.insert(target, at: 0) }
                     else { appTargets.append(target) }
                 }
                 if appTargets.isEmpty {
-                    appTargets.append(SwitchTarget(app: app, window: nil, title: app.localizedName ?? "App",
-                                                   detail: app.isHidden ? "Hidden app" : "App"))
+                    appTargets.append(SwitchTarget(app: app, window: nil, title: app.localizedName ?? T("App"),
+                                                   detail: app.isHidden ? T("Hidden app") : T("App")))
                 }
                 targets.append(contentsOf: appTargets)
             }
@@ -202,7 +202,7 @@ private struct SwitcherView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                Text("Windows & Apps").font(.headline)
+                Text(T("Windows & Apps")).font(.headline)
                 Spacer()
                 Text("CPU").frame(width: UsageColumns.cpu, alignment: .trailing)
                 Text("RAM").frame(width: UsageColumns.ram, alignment: .trailing)
@@ -237,7 +237,7 @@ private struct SwitcherView: View {
                 .onChange(of: model.selected) { index in proxy.scrollTo(index) }
                 .onAppear { proxy.scrollTo(model.selected) }
             }
-            Text("Tab: next   Release ⌘: open")
+            Text(T("Tab: next   Release ⌘: open"))
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(20)

@@ -11,10 +11,10 @@ final class UpdateChecker: ObservableObject {
 
     /// The alert's text. Templates take {0} like `Strings.fill`.
     struct Wording {
-        var title = "{0} {1} is available"
-        var message = "You have version {0}. Download the new version from GitHub?"
-        var download = "Download"
-        var later = "Later"
+        var title = T("{0} {1} is available")
+        var message = T("You have version {0}. Download the new version from GitHub?")
+        var download = T("Download")
+        var later = T("Later")
     }
 
     @Published private(set) var available: Release?
